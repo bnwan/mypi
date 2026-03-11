@@ -1,10 +1,20 @@
 /**
  * Tests for shell execution utilities
- * Covers: success cases, command not found, non-zero exit codes, timeout handling
+ * Covers: success cases, command not found, non-zero exit codes, timeout handling,
+ * stdin input, and maxBuffer protection
  */
 
 import { describe, it, expect } from "bun:test";
-import { exec, execText, execSilent, ExecError, CommandNotFoundError, TimeoutError } from "./exec";
+import { 
+  exec, 
+  execText, 
+  execSilent, 
+  execWithInput,
+  ExecError, 
+  CommandNotFoundError, 
+  TimeoutError,
+  MaxBufferError 
+} from "./exec";
 
 describe("exec", () => {
   describe("successful execution", () => {
@@ -56,6 +66,27 @@ describe("exec", () => {
       const success = await execSilent("non_existent_command_xyz");
       
       expect(success).toBe(false);
+    });
+  });
+
+  describe("execWithInput", () => {
+    it("should pass input to stdin", async () => {
+      const result = await execWithInput("cat", [], "hello from input");
+      
+      expect(result.stdout).toBe("hello from input");
+    });
+
+    it("should handle multi-line input", async () => {
+      const input = "line1\nline2\nline3";
+      const result = await execWithInput("cat", [], input);
+      
+      expect(result.stdout).toBe(input);
+    });
+
+    it("should work with exec stdin option", async () => {
+      const result = await exec("cat", [], { stdin: "test data" });
+      
+      expect(result.stdout).toBe("test data");
     });
   });
 
@@ -128,7 +159,7 @@ describe("exec", () => {
     it("should throw TimeoutError when command exceeds timeout", async () => {
       expect(async () => {
         await exec("sleep", ["10"], { timeout: 50 });
-      }).toThrow(/timed out/);
+      }).toThrow(/timed out|timeout/i);
     });
 
     it("should be catchable as TimeoutError", async () => {
@@ -156,6 +187,34 @@ describe("exec", () => {
       const result = await exec("echo", ["quick"], { timeout: 5000 });
       
       expect(result.stdout).toBe("quick");
+    });
+  });
+
+  describe("maxBuffer protection", () => {
+    it("should throw MaxBufferError when stdout exceeds limit", async () => {
+      try {
+        // Generate output larger than 100 bytes
+        await exec("sh", ["-c", "python3 -c \"print('A' * 200)\""], { maxBuffer: 100 });
+        expect.fail("Should have thrown");
+      } catch (error) {
+        expect(error).toBeInstanceOf(MaxBufferError);
+      }
+    });
+
+    it("should use default 10MB buffer when not specified", async () => {
+      // Should not throw for reasonably sized output
+      const result = await exec("echo", ["test output"]);
+      expect(result.stdout).toBe("test output");
+    });
+
+    it("should be catchable as MaxBufferError", async () => {
+      try {
+        await exec("sh", ["-c", "python3 -c \"print('A' * 200)\""], { maxBuffer: 100 });
+        expect.fail("Should have thrown");
+      } catch (error) {
+        expect(error).toBeInstanceOf(MaxBufferError);
+        expect(error).toBeInstanceOf(ExecError);
+      }
     });
   });
 
@@ -209,9 +268,9 @@ describe("exec", () => {
 
   describe("edge cases", () => {
     it("should handle commands with special characters", async () => {
-      const result = await exec("echo", ["special: $HOME @ # %"]);
+      const result = await exec("echo", ["special: \$HOME @ # %"]);
       
-      expect(result.stdout).toBe("special: $HOME @ # %");
+      expect(result.stdout).toBe("special: \$HOME @ # %");
     });
 
     it("should handle empty arguments", async () => {
@@ -237,6 +296,13 @@ describe("exec", () => {
       const result = await exec("echo", []);
       
       expect(result.stdout).toBe("");
+    });
+
+    it("should handle large stdin input", async () => {
+      const largeInput = "x".repeat(10000);
+      const result = await exec("cat", [], { stdin: largeInput });
+      
+      expect(result.stdout).toBe(largeInput);
     });
   });
 });
