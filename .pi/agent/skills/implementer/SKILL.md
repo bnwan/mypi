@@ -71,8 +71,8 @@ Repeat for each logical chunk of work.
 
 ### 4. Quality Gate
 Before finishing, run:
-1. Full test suite: `npm test` or check AGENTS.md for test command
-2. Type check: `npm run typecheck` or `tsc --noEmit`
+1. Full test suite: `bun test` or check AGENTS.md for test command
+2. Type check: `bun run typecheck` or `tsc --noEmit`
 3. Lint: check AGENTS.md for lint command
 
 If any fail, fix before pushing.

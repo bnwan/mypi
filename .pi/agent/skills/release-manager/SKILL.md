@@ -98,12 +98,12 @@ Once confirmed:
 
 ```bash
 # Update CHANGELOG.md
-# Update package.json version
-npm version {{version}} --no-git-tag-version
+# Update package.json version ( Bun doesn't have 'bun version', use sed or manual edit)
+sed -i 's/"version": ".*"/"version": "{{version}}"/' package.json
 
 # Commit
 # [skip ci] prevents infinite loop
-git add CHANGELOG.md package.json package-lock.json
+git add CHANGELOG.md package.json
 git commit -m "chore(release): {{version}} [skip ci]"
 
 # Tag
