@@ -7,6 +7,18 @@ description: Full implementation lifecycle with TDD. Use when implementing GitHu
 
 Handles the full implementation lifecycle: picking up a GitHub issue, writing code with TDD, running tests, pushing a PR, and addressing review comments.
 
+## ⚠️ MANDATORY COMPLIANCE
+
+**ALL instructions in this skill MUST be followed EXACTLY.** Do not:
+- Skip steps (especially planning phase)
+- Skip tests (TDD is mandatory)
+- Create files in the main worktree before creating the auto-pr worktree
+- Remove the worktree before PR is merged
+- Skip quality gate checks
+- Skip replying to review comments
+
+Failure to follow this skill exactly will result in incomplete or incorrect implementations.
+
 ## When to Use
 
 - `/skill:implementer` before starting work
@@ -90,42 +102,83 @@ git add .
 git commit -m "feat: {{description}} [closes #{{number}}]"
 git push origin auto-pr/issue-{{number}}-{{short-description}}
 
+# Stay in worktree until PR is merged - do not remove yet!
+```
+
+### 6. Update Issue & Monitor PR
+After PR is created:
+
+1. Comment on the issue:
+   ```
+   Implemented in PR #{{pr_number}}
+   
+   Summary of changes:
+   - {{change1}}
+   - {{change2}}
+   - {{change3}}
+   
+   Ready for review.
+   ```
+
+2. **Monitor for review comments**: Check periodically or wait for notifications:
+   ```bash
+   # List review comments on the PR
+   gh pr view {{number}} --json comments
+   
+   # Check PR review state
+   gh pr view {{number}} --json reviewDecision,state
+   ```
+
+3. **When reviews are submitted**: Review feedback will appear as comments on the PR. Address them using the process below.
+
+### 7. Cleanup (After PR Merge)
+Only cleanup after PR is approved, merged, and **all review comments are resolved**:
+```bash
+# Verify all review comments are resolved
+gh pr view {{number}} --json reviewDecision
+# Should show: "APPROVED" or "reviewDecision": "APPROVED"
+
 # Return to main worktree
+cd /path/to/main/project
+
+# Remove the worktree
 git worktree remove ../auto-pr-issue-{{number}}
-```
 
-### 6. Update Issue
-After PR is created, comment on the issue:
-```
-Implemented in PR #{{pr_number}}
-
-Summary of changes:
-- {{change1}}
-- {{change2}}
-- {{change3}}
-
-Ready for review.
+# Delete the remote branch (optional, if not auto-deleted)
+git push origin --delete auto-pr/issue-{{number}}-{{short-description}}
 ```
 
 ## Addressing Review Comments
 
 When `/address-pr-comments {{number}}` is called:
 
-1. Fetch all review comments:
+1. Check out the existing worktree (should already exist):
+   ```bash
+   cd ../auto-pr-issue-{{number}}
+   git pull origin auto-pr/issue-{{number}}-{{short-description}}
+   ```
+
+2. Fetch all review comments:
    ```bash
    gh api repos/{owner}/{repo}/pulls/{{number}}/comments
    gh pr view {{number}} --json comments
    ```
 
-2. Group by file/area and batch fixes
+3. Group by file/area and batch fixes
 
-3. Make changes, test, commit: `fix: address PR review feedback`
+4. Make changes, test, commit: `fix: address PR review feedback`
 
-4. Push and comment on PR:
+5. Push and comment on PR:
    ```
    Addressed all review comments:
    - {{comment1}} → {{fix1}}
    - {{comment2}} → {{fix2}}
+   ```
+   
+6. **For each review comment, add a response**: Use the GitHub CLI to reply to each review comment thread indicating how it was addressed:
+   ```bash
+   gh api repos/{owner}/{repo}/pulls/{pr_number}/comments/{comment_id}/replies \
+     -f body="Fixed in {{commit_hash}} - {{description_of_fix}}"
    ```
 
 ## Rules
@@ -136,3 +189,4 @@ When `/address-pr-comments {{number}}` is called:
 - Quality gate must pass before pushing
 - Update the issue with what was delivered
 - One issue = one PR (don't batch multiple features)
+- **Keep worktree until PR is merged** — cleanup only happens after merge
