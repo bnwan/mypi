@@ -22,6 +22,6 @@ The following changes were made across the repo:
    ```
 2. Update the system symlink:
    ```sh
-   sudo ln -sf /Users/bnwaneampeh/projects/pi/mypi /usr/local/bin/mypi
+   sudo ln -sf ~/projects/pi/mypi /usr/local/bin/mypi
    sudo rm /usr/local/bin/pi
    ```
