@@ -1,0 +1,35 @@
+{
+  "name": "mypi",
+  "version": "0.1.0",
+  "description": "CLI tool for running pi coding agent in Docker containers",
+  "main": "src/main.ts",
+  "bin": {
+    "mypi": "bin/mypi"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "bun test",
+    "test:watch": "bun test --watch",
+    "dev": "bun run src/main.ts",
+    "lint": "tsc --noEmit",
+    "install:global": "bun link"
+  },
+  "keywords": [
+    "pi",
+    "coding-agent",
+    "docker",
+    "cli"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.0.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "bun": ">=1.0.0"
+  }
+}
