@@ -158,13 +158,13 @@ describe("exec", () => {
   describe("timeout handling", () => {
     it("should throw TimeoutError when command exceeds timeout", async () => {
       expect(async () => {
-        await exec("sleep", ["10"], { timeout: 50 });
+        await exec("sleep", ["1"], { timeout: 50 });
       }).toThrow(/timed out|timeout/i);
     });
 
     it("should be catchable as TimeoutError", async () => {
       try {
-        await exec("sleep", ["10"], { timeout: 50 });
+        await exec("sleep", ["1"], { timeout: 50 });
         expect.fail("Should have thrown");
       } catch (error) {
         expect(error).toBeInstanceOf(TimeoutError);
@@ -174,7 +174,7 @@ describe("exec", () => {
 
     it("should include timeout duration in error message", async () => {
       try {
-        await exec("sleep", ["10"], { timeout: 100 });
+        await exec("sleep", ["1"], { timeout: 100 });
         expect.fail("Should have thrown");
       } catch (error) {
         if (error instanceof TimeoutError) {
@@ -291,8 +291,7 @@ describe("exec", () => {
       expect(result.stdout).toBe("hello");
     });
 
-    it("should handle single argument without array", async () => {
-      // No args passed
+    it("should handle no args passed (empty array)", async () => {
       const result = await exec("echo", []);
       
       expect(result.stdout).toBe("");

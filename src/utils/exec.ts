@@ -15,6 +15,8 @@ export interface ExecOptions {
   stdin?: string | Buffer | null;
   /** Maximum stdout/stderr size in bytes (default: 10MB) */
   maxBuffer?: number;
+  /** Suppress stdout/stderr buffering (default: false) */
+  silent?: boolean;
 }
 
 export interface ExecResult {
@@ -109,12 +111,13 @@ export async function exec(
   args: string[] = [],
   options: ExecOptions = {}
 ): Promise<ExecResult> {
-  const { 
-    timeout, 
-    cwd, 
-    env, 
+  const {
+    timeout,
+    cwd,
+    env,
     stdin,
-    maxBuffer = DEFAULT_MAX_BUFFER 
+    maxBuffer = DEFAULT_MAX_BUFFER,
+    silent = false,
   } = options;
 
   // Build full command for error messages
@@ -123,11 +126,9 @@ export async function exec(
   // Create abort controller for timeout
   const abortController = new AbortController();
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
-  let timedOut = false;
 
   if (timeout && timeout > 0) {
     timeoutId = setTimeout(() => {
-      timedOut = true;
       abortController.abort();
     }, timeout);
   }
@@ -136,20 +137,55 @@ export async function exec(
     const proc = Bun.spawn([command, ...args], {
       cwd: cwd || undefined,
       env: env ? { ...process.env, ...env } : process.env,
-      stdio: ["pipe", "pipe", "pipe"] as ["pipe", "pipe", "pipe"],
+      stdio: silent
+        ? (["pipe", "ignore", "ignore"] as ["pipe", "ignore", "ignore"])
+        : (["pipe", "pipe", "pipe"] as ["pipe", "pipe", "pipe"]),
       signal: abortController.signal,
     });
 
-    // Write stdin if provided
-    if (stdin !== undefined && stdin !== null) {
-      const inputData = Buffer.from(stdin);
-      if (inputData.length > 0) {
-        await proc.stdin.write(inputData);
+    // Write stdin if provided (only when not silent)
+    if (!silent) {
+      if (stdin !== undefined && stdin !== null) {
+        const inputData = Buffer.from(stdin);
+        if (inputData.length > 0) {
+          await proc.stdin.write(inputData);
+        }
+        proc.stdin.end();
+      } else {
+        // Close stdin immediately if no input
+        proc.stdin.end();
       }
-      proc.stdin.end();
-    } else {
-      // Close stdin immediately if no input
-      proc.stdin.end();
+    }
+
+    // If silent, skip output collection
+    if (silent) {
+      const exitCode = await proc.exited;
+
+      // Clear timeout if set
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+
+      // Check for timeout first
+      if (
+        (exitCode === 143 || exitCode === 128 + 15) &&
+        timeoutId != null &&
+        abortController.signal.aborted
+      ) {
+        throw new TimeoutError(fullCommand, timeout || 0);
+      }
+
+      if (exitCode !== 0) {
+        throw new ExecError(
+          `Command failed with exit code ${exitCode}: ${fullCommand}`,
+          fullCommand,
+          exitCode,
+          "",
+          ""
+        );
+      }
+
+      return { stdout: "", stderr: "", exitCode };
     }
 
     // Collect stdout and stderr with maxBuffer checks
@@ -183,8 +219,8 @@ export async function exec(
     const stderrLenRef = { value: 0 };
 
     await Promise.all([
-      collectStream(proc.stdout, stdoutChunks, stdoutLenRef),
-      collectStream(proc.stderr, stderrChunks, stderrLenRef),
+      collectStream(proc.stdout!, stdoutChunks, stdoutLenRef),
+      collectStream(proc.stderr!, stderrChunks, stderrLenRef),
     ]);
 
     // Wait for process to complete
@@ -196,7 +232,12 @@ export async function exec(
     }
 
     // Check for timeout first (exit code 143 = SIGTERM from abort)
-    if ((exitCode === 143 || exitCode === 128 + 15 || (exitCode === 15 && timedOut)) && timedOut) {
+    // Only classify as timeout when timeout was set AND signal was aborted
+    if (
+      (exitCode === 143 || exitCode === 128 + 15) &&
+      timeoutId != null &&
+      abortController.signal.aborted
+    ) {
       throw new TimeoutError(fullCommand, timeout || 0);
     }
 
@@ -232,7 +273,13 @@ export async function exec(
     }
 
     // Handle timeout (AbortError from signal)
-    if (error instanceof Error && error.name === "AbortError" && timedOut) {
+    // Only treat as timeout when timeout was set AND signal was actually aborted
+    if (
+      error instanceof Error &&
+      error.name === "AbortError" &&
+      timeoutId != null &&
+      abortController.signal.aborted
+    ) {
       throw new TimeoutError(fullCommand, timeout || 0);
     }
 
@@ -292,10 +339,10 @@ export async function execText(
 export async function execSilent(
   command: string,
   args: string[] = [],
-  options: ExecOptions = {}
+  options: Omit<ExecOptions, "silent"> = {}
 ): Promise<boolean> {
   try {
-    await exec(command, args, options);
+    await exec(command, args, { ...options, silent: true });
     return true;
   } catch {
     return false;
