@@ -7,6 +7,7 @@
 import * as os from "os";
 import * as path from "path";
 import * as process from "process";
+import { fileURLToPath } from "url";
 
 /**
  * The name of the agent configuration directory relative to user's home
@@ -33,9 +34,14 @@ export function expandHomeDir(inputPath: string): string {
     return "";
   }
 
-  if (inputPath === "~" || inputPath.startsWith("~/")) {
+  if (inputPath === "~") {
+    return process.env.HOME ?? os.homedir();
+  }
+
+  if (inputPath.startsWith("~/")) {
     const homeDir = process.env.HOME ?? os.homedir();
-    return inputPath.replace("~", homeDir);
+    const remainder = inputPath.slice(2); // remove leading "~/"
+    return path.join(homeDir, remainder);
   }
 
   return inputPath;
@@ -93,7 +99,7 @@ export function resolveWorkspacePath(workspacePath: string): string {
 /**
  * Resolves the directory containing the current script file
  *
- * Uses __dirname which is provided by Bun/node at runtime
+ * Uses import.meta.url for ESM compatibility (works in Bun and Node)
  *
  * @returns Absolute path to the directory containing the current script
  *
@@ -103,6 +109,5 @@ export function resolveWorkspacePath(workspacePath: string): string {
  * ```
  */
 export function resolveScriptDir(): string {
-  // __dirname is the directory containing the current file
-  return __dirname;
+  return path.dirname(fileURLToPath(import.meta.url));
 }

@@ -38,7 +38,7 @@ describe("paths", () => {
 
     test("handles tilde with trailing slash", () => {
       process.env.HOME = "/home/testuser";
-      expect(expandHomeDir("~/")).toBe("/home/testuser/");
+      expect(expandHomeDir("~/")).toBe("/home/testuser");
     });
 
     test("leaves absolute paths unchanged", () => {
@@ -51,6 +51,10 @@ describe("paths", () => {
 
     test("handles empty string", () => {
       expect(expandHomeDir("")).toBe("");
+    });
+
+    test("does not expand tilde in middle of path", () => {
+      expect(expandHomeDir("/prefix/~/suffix")).toBe("/prefix/~/suffix");
     });
 
     test("handles paths with spaces", () => {
