@@ -1,2 +1,6 @@
 // Docker module - container management
-export {};
+export {
+  DockerManager,
+  type RunOptions,
+  type ContainerInfo,
+} from "./DockerManager";
