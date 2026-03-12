@@ -1,2 +1,2 @@
 // Config module - path and token resolution
-export {};
+export * from "./paths";
