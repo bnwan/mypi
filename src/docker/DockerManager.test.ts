@@ -3,7 +3,7 @@
  * Covers: build, image existence, run, list, stop, volume mounts, env vars
  */
 
-import { describe, it, expect, beforeEach, spyOn } from "bun:test";
+import { describe, it, expect, beforeEach, afterEach, spyOn } from "bun:test";
 import * as execModule from "../utils/exec";
 import { DockerManager } from "./DockerManager";
 
@@ -41,7 +41,7 @@ describe("DockerManager", () => {
       expect(execSpy).toHaveBeenCalledWith("docker", [
         "build",
         "-t",
-        "mypi-agent",
+        "mypi-dev",
         "-f",
         "/path/to/dockerfile",
         "/path/to",
@@ -69,7 +69,7 @@ describe("DockerManager", () => {
         throw new Error("Docker build failed");
       });
 
-      expect(manager.build("/path/to/dockerfile")).rejects.toThrow();
+      await expect(manager.build("/path/to/dockerfile")).rejects.toThrow();
     });
   });
 
@@ -87,7 +87,7 @@ describe("DockerManager", () => {
       expect(execSpy).toHaveBeenCalledWith("docker", [
         "images",
         "-q",
-        "mypi-agent",
+        "mypi-dev",
       ]);
     });
 
@@ -132,13 +132,13 @@ describe("DockerManager", () => {
         "-it",
         "-v",
         "/host/workspace:/workspace",
-        "mypi-agent",
+        "mypi-dev",
         "--flag",
         "value",
       ]);
     });
 
-    it("should run container with name (no --rm)", async () => {
+    it("should run container with name (no --rm, foreground)", async () => {
       execSpy.mockResolvedValue({ stdout: "", stderr: "", exitCode: 0 });
 
       await manager.run({
@@ -149,13 +149,12 @@ describe("DockerManager", () => {
 
       expect(execSpy).toHaveBeenCalledWith("docker", [
         "run",
-        "-d",
         "-it",
         "--name",
         "my-container",
         "-v",
         "/host/workspace:/workspace",
-        "mypi-agent",
+        "mypi-dev",
       ]);
     });
 
@@ -177,7 +176,7 @@ describe("DockerManager", () => {
         "DEBUG=true",
         "-v",
         "/host/workspace:/workspace",
-        "mypi-agent",
+        "mypi-dev",
       ]);
     });
 
@@ -199,7 +198,7 @@ describe("DockerManager", () => {
         "/extra/data:/data",
         "-v",
         "/cache:/cache:ro",
-        "mypi-agent",
+        "mypi-dev",
       ]);
     });
   });
@@ -212,7 +211,7 @@ describe("DockerManager", () => {
             ID: "abc123",
             Names: "mypi-container",
             State: "running",
-            Image: "mypi-agent",
+            Image: "mypi-dev",
           },
         ]),
         stderr: "",
@@ -224,13 +223,15 @@ describe("DockerManager", () => {
       expect(execSpy).toHaveBeenCalledWith("docker", [
         "ps",
         "--filter",
-        "ancestor=mypi-agent",
+        "ancestor=mypi-dev",
         "--format",
         "json",
       ]);
       expect(containers).toHaveLength(1);
       expect(containers[0].id).toBe("abc123");
       expect(containers[0].name).toBe("mypi-container");
+      expect(containers[0].state).toBe("running");
+      expect(containers[0].image).toBe("mypi-dev");
     });
 
     it("should return empty array when no containers running", async () => {
@@ -256,9 +257,10 @@ describe("DockerManager", () => {
       ]);
     });
 
-    it("should handle plain text output when json not available", async () => {
+    it("should parse newline-delimited JSON output", async () => {
+      // Docker outputs one JSON object per line
       execSpy.mockResolvedValue({
-        stdout: "mypi-container\nanother-container",
+        stdout: '{"ID":"abc123","Names":"mypi-container","State":"running","Image":"mypi-dev"}\n{"ID":"def456","Names":"another-container","State":"exited","Image":"mypi-dev"}',
         stderr: "",
         exitCode: 0,
       });
@@ -266,8 +268,12 @@ describe("DockerManager", () => {
       const containers = await manager.list();
 
       expect(containers).toHaveLength(2);
+      expect(containers[0].id).toBe("abc123");
       expect(containers[0].name).toBe("mypi-container");
+      expect(containers[0].state).toBe("running");
+      expect(containers[1].id).toBe("def456");
       expect(containers[1].name).toBe("another-container");
+      expect(containers[1].state).toBe("exited");
     });
   });
 
@@ -277,8 +283,7 @@ describe("DockerManager", () => {
 
       await manager.stop("my-container");
 
-      expect(execSpy).toHaveBeenCalledWith("docker", ["stop", "my-container"]);
-      expect(execSpy).toHaveBeenCalledWith("docker", ["rm", "my-container"]);
+      expect(execSpy).toHaveBeenCalledWith("docker", ["rm", "-f", "my-container"]);
     });
 
     it("should stop and remove by container ID", async () => {
@@ -286,8 +291,7 @@ describe("DockerManager", () => {
 
       await manager.stop("abc123");
 
-      expect(execSpy).toHaveBeenCalledWith("docker", ["stop", "abc123"]);
-      expect(execSpy).toHaveBeenCalledWith("docker", ["rm", "abc123"]);
+      expect(execSpy).toHaveBeenCalledWith("docker", ["rm", "-f", "abc123"]);
     });
 
     it("should throw error when stop fails", async () => {
@@ -295,7 +299,7 @@ describe("DockerManager", () => {
         throw new Error("Container not found");
       });
 
-      expect(manager.stop("nonexistent")).rejects.toThrow();
+      await expect(manager.stop("nonexistent")).rejects.toThrow();
     });
   });
 });

@@ -31,7 +31,7 @@ export interface ContainerInfo {
 export class DockerManager {
   private readonly imageName: string;
 
-  constructor(imageName: string = "mypi-agent") {
+  constructor(imageName: string = "mypi-dev") {
     this.imageName = imageName;
   }
 
@@ -70,13 +70,16 @@ export class DockerManager {
    * Run Docker container
    * @param options - Run configuration options
    * @returns Promise resolving when container starts
+   * @remarks Named containers run in foreground (interactive), unnamed containers
+   * are removed on exit (--rm). The `additionalArgs` are passed to the container
+   * entrypoint, not as `docker run` options.
    */
   async run(options: RunOptions): Promise<void> {
     const args: string[] = ["run"];
 
-    // Named containers run detached (no --rm), unnamed containers are removed on exit
+    // Named containers persist (no --rm), unnamed containers are removed on exit
     if (options.name) {
-      args.push("-d", "-it");
+      args.push("-it");
       args.push("--name", options.name);
     } else {
       args.push("--rm", "-it");
@@ -126,28 +129,30 @@ export class DockerManager {
       return [];
     }
 
-    try {
-      const parsed = JSON.parse(output);
-      // Handle both single object and array of objects
-      const containers = Array.isArray(parsed) ? parsed : [parsed];
-      return containers.map((c: Record<string, string>) => ({
-        id: c.ID || "",
-        name: c.Names || "",
-        state: c.State || "",
-        image: c.Image || "",
-      }));
-    } catch {
-      // Fallback to plain text parsing (line-separated names)
-      return output
-        .split("\n")
-        .filter((line) => line.trim())
-        .map((name) => ({
-          id: "",
-          name: name.trim(),
-          state: "running",
-          image: this.imageName,
-        }));
+    // Docker outputs one JSON object per line for --format json
+    const lines = output.split("\n").filter((line) => line.trim());
+    const containers: ContainerInfo[] = [];
+
+    for (const line of lines) {
+      try {
+        const parsed = JSON.parse(line);
+        // Handle both single object and potential array wrapping
+        const items = Array.isArray(parsed) ? parsed : [parsed];
+        for (const c of items) {
+          containers.push({
+            id: c.ID || "",
+            name: c.Names || "",
+            state: c.State || "",
+            image: c.Image || "",
+          });
+        }
+      } catch {
+        // Skip lines that aren't valid JSON rather than fabricating data
+        continue;
+      }
     }
+
+    return containers;
   }
 
   /**
@@ -156,7 +161,8 @@ export class DockerManager {
    * @returns Promise resolving when container is stopped and removed
    */
   async stop(nameOrId: string): Promise<void> {
-    await exec("docker", ["stop", nameOrId]);
-    await exec("docker", ["rm", nameOrId]);
+    // Use rm -f to atomically stop and remove the container
+    // This avoids leaving zombie containers if stop succeeds but rm fails
+    await exec("docker", ["rm", "-f", nameOrId]);
   }
 }
