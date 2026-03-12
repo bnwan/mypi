@@ -27,4 +27,45 @@ describe("DockerManager", () => {
       expect(customManager).toBeDefined();
     });
   });
+
+  describe("build", () => {
+    it("should call docker build with correct arguments", async () => {
+      execSpy.mockResolvedValue({ stdout: "", stderr: "", exitCode: 0 });
+
+      await manager.build("/path/to/dockerfile");
+
+      expect(execSpy).toHaveBeenCalledWith("docker", [
+        "build",
+        "-t",
+        "mypi-agent",
+        "-f",
+        "/path/to/dockerfile",
+        "/path/to",
+      ]);
+    });
+
+    it("should call docker build with custom image name", async () => {
+      execSpy.mockResolvedValue({ stdout: "", stderr: "", exitCode: 0 });
+
+      const customManager = new DockerManager("custom-image");
+      await customManager.build("/path/to/dockerfile");
+
+      expect(execSpy).toHaveBeenCalledWith("docker", [
+        "build",
+        "-t",
+        "custom-image",
+        "-f",
+        "/path/to/dockerfile",
+        "/path/to",
+      ]);
+    });
+
+    it("should throw error when docker build fails", async () => {
+      execSpy.mockImplementation(() => {
+        throw new Error("Docker build failed");
+      });
+
+      expect(manager.build("/path/to/dockerfile")).rejects.toThrow();
+    });
+  });
 });
