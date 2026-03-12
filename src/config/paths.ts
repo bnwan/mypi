@@ -21,6 +21,8 @@ export const CONFIG_DIR_NAME = ".mypi/agent";
  * @param inputPath - Path that may contain a tilde to expand
  * @returns The path with tilde expanded to home directory, or original path if no tilde
  *
+ * @note Only expands standalone `~` or `~/path`, not `~username` syntax for other users
+ *
  * @example
  * ```typescript
  * expandHomeDir("~/config")     // → "/home/user/config"
@@ -52,6 +54,7 @@ export function expandHomeDir(inputPath: string): string {
  * Returns ~/.mypi/agent with expanded home directory
  *
  * @returns Absolute path to the agent configuration directory
+ * @throws {Error} If home directory cannot be determined
  *
  * @example
  * ```typescript
@@ -59,7 +62,13 @@ export function expandHomeDir(inputPath: string): string {
  * ```
  */
 export function resolveConfigDir(): string {
-  return expandHomeDir(`~/${CONFIG_DIR_NAME}`);
+  const home = expandHomeDir("~");
+  if (!home) {
+    throw new Error(
+      "Could not determine home directory. HOME environment variable and os.homedir() both returned empty."
+    );
+  }
+  return path.join(home, CONFIG_DIR_NAME);
 }
 
 /**
