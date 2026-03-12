@@ -16,6 +16,10 @@ describe("DockerManager", () => {
     execSpy = spyOn(execModule, "exec");
   });
 
+  afterEach(() => {
+    execSpy.mockRestore();
+  });
+
   describe("constructor", () => {
     it("should create instance with default image name", () => {
       const defaultManager = new DockerManager();
