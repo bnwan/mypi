@@ -68,4 +68,48 @@ describe("DockerManager", () => {
       expect(manager.build("/path/to/dockerfile")).rejects.toThrow();
     });
   });
+
+  describe("imageExists", () => {
+    it("should return true when image exists", async () => {
+      execSpy.mockResolvedValue({
+        stdout: "IMAGE ID\nabc123",
+        stderr: "",
+        exitCode: 0,
+      });
+
+      const exists = await manager.imageExists();
+
+      expect(exists).toBe(true);
+      expect(execSpy).toHaveBeenCalledWith("docker", [
+        "images",
+        "-q",
+        "mypi-agent",
+      ]);
+    });
+
+    it("should return false when image does not exist", async () => {
+      execSpy.mockResolvedValue({
+        stdout: "",
+        stderr: "",
+        exitCode: 0,
+      });
+
+      const exists = await manager.imageExists();
+
+      expect(exists).toBe(false);
+    });
+
+    it("should check for custom image name", async () => {
+      execSpy.mockResolvedValue({ stdout: "", stderr: "", exitCode: 0 });
+
+      const customManager = new DockerManager("custom-image");
+      await customManager.imageExists();
+
+      expect(execSpy).toHaveBeenCalledWith("docker", [
+        "images",
+        "-q",
+        "custom-image",
+      ]);
+    });
+  });
 });

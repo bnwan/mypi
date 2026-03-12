@@ -30,4 +30,17 @@ export class DockerManager {
       dir,
     ]);
   }
+
+  /**
+   * Check if Docker image exists locally
+   * @returns Promise resolving to true if image exists
+   */
+  async imageExists(): Promise<boolean> {
+    try {
+      const result = await exec("docker", ["images", "-q", this.imageName]);
+      return result.stdout.trim().length > 0;
+    } catch {
+      return false;
+    }
+  }
 }
