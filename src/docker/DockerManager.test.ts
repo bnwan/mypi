@@ -266,4 +266,32 @@ describe("DockerManager", () => {
       expect(containers[1].name).toBe("another-container");
     });
   });
+
+  describe("stop", () => {
+    it("should stop and remove container by name", async () => {
+      execSpy.mockResolvedValue({ stdout: "", stderr: "", exitCode: 0 });
+
+      await manager.stop("my-container");
+
+      expect(execSpy).toHaveBeenCalledWith("docker", ["stop", "my-container"]);
+      expect(execSpy).toHaveBeenCalledWith("docker", ["rm", "my-container"]);
+    });
+
+    it("should stop and remove by container ID", async () => {
+      execSpy.mockResolvedValue({ stdout: "", stderr: "", exitCode: 0 });
+
+      await manager.stop("abc123");
+
+      expect(execSpy).toHaveBeenCalledWith("docker", ["stop", "abc123"]);
+      expect(execSpy).toHaveBeenCalledWith("docker", ["rm", "abc123"]);
+    });
+
+    it("should throw error when stop fails", async () => {
+      execSpy.mockImplementation(() => {
+        throw new Error("Container not found");
+      });
+
+      expect(manager.stop("nonexistent")).rejects.toThrow();
+    });
+  });
 });

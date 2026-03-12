@@ -149,4 +149,14 @@ export class DockerManager {
         }));
     }
   }
+
+  /**
+   * Stop and remove a container
+   * @param nameOrId - Container name or ID to stop
+   * @returns Promise resolving when container is stopped and removed
+   */
+  async stop(nameOrId: string): Promise<void> {
+    await exec("docker", ["stop", nameOrId]);
+    await exec("docker", ["rm", nameOrId]);
+  }
 }
