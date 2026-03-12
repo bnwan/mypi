@@ -112,4 +112,91 @@ describe("DockerManager", () => {
       ]);
     });
   });
+
+  describe("run", () => {
+    it("should run container without name (includes --rm)", async () => {
+      execSpy.mockResolvedValue({ stdout: "", stderr: "", exitCode: 0 });
+
+      await manager.run({
+        workspace: "/host/workspace",
+        additionalArgs: ["--flag", "value"],
+      });
+
+      expect(execSpy).toHaveBeenCalledWith("docker", [
+        "run",
+        "--rm",
+        "-it",
+        "-v",
+        "/host/workspace:/workspace",
+        "mypi-agent",
+        "--flag",
+        "value",
+      ]);
+    });
+
+    it("should run container with name (no --rm)", async () => {
+      execSpy.mockResolvedValue({ stdout: "", stderr: "", exitCode: 0 });
+
+      await manager.run({
+        name: "my-container",
+        workspace: "/host/workspace",
+        additionalArgs: [],
+      });
+
+      expect(execSpy).toHaveBeenCalledWith("docker", [
+        "run",
+        "-d",
+        "-it",
+        "--name",
+        "my-container",
+        "-v",
+        "/host/workspace:/workspace",
+        "mypi-agent",
+      ]);
+    });
+
+    it("should pass environment variables", async () => {
+      execSpy.mockResolvedValue({ stdout: "", stderr: "", exitCode: 0 });
+
+      await manager.run({
+        workspace: "/host/workspace",
+        env: { API_KEY: "secret123", DEBUG: "true" },
+      });
+
+      expect(execSpy).toHaveBeenCalledWith("docker", [
+        "run",
+        "--rm",
+        "-it",
+        "-e",
+        "API_KEY=secret123",
+        "-e",
+        "DEBUG=true",
+        "-v",
+        "/host/workspace:/workspace",
+        "mypi-agent",
+      ]);
+    });
+
+    it("should pass multiple volume mounts", async () => {
+      execSpy.mockResolvedValue({ stdout: "", stderr: "", exitCode: 0 });
+
+      await manager.run({
+        workspace: "/host/workspace",
+        volumes: ["/extra/data:/data", "/cache:/cache:ro"],
+      });
+
+      expect(execSpy).toHaveBeenCalledWith("docker", [
+        "run",
+        "--rm",
+        "-it",
+        "-v",
+        "/host/workspace:/workspace",
+        "-v",
+        "/extra/data:/data",
+        "-v",
+        "/cache:/cache:ro",
+        "mypi-agent",
+      ]);
+    });
+  });
 });
