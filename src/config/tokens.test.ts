@@ -4,7 +4,7 @@
  * and graceful failure handling
  */
 
-import { describe, it, expect, beforeEach, afterEach, spyOn, mock } from "bun:test";
+import { describe, it, expect, beforeEach, afterEach, mock } from "bun:test";
 import { resolveToken } from "./tokens";
 
 // Mock exec module
@@ -30,7 +30,7 @@ describe("tokens", () => {
 
     // Get the mocked function
     execTextMock = execText as unknown as ReturnType<typeof mock>;
-    execTextMock.mockReset?.();
+    execTextMock.mockReset();
   });
 
   afterEach(() => {
@@ -48,7 +48,7 @@ describe("tokens", () => {
     }
 
     // Clear mocks
-    execTextMock.mockClear?.();
+    execTextMock.mockClear();
   });
 
   describe("GH_TOKEN precedence", () => {

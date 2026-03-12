@@ -37,8 +37,7 @@ export async function resolveToken(): Promise<string> {
   // Priority 3: gh CLI
   try {
     const cliToken = await execText("gh", ["auth", "token"]);
-    const trimmed = cliToken.trim();
-    return trimmed;
+    return cliToken.trim();
   } catch {
     // gh CLI failed or not available, return empty string
     return "";
