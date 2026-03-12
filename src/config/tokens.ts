@@ -6,6 +6,8 @@
 
 import { execText } from "../utils/exec";
 
+export type ExecTextFn = typeof execText;
+
 /**
  * Resolves a GitHub token following precedence order:
  * 1. GH_TOKEN environment variable
@@ -13,6 +15,7 @@ import { execText } from "../utils/exec";
  * 3. Output of `gh auth token` CLI command
  * 4. Empty string if none available
  *
+ * @param exec - Optional exec function for testing (defaults to execText)
  * @returns Promise resolving to the resolved token or empty string
  *
  * @example
@@ -21,7 +24,7 @@ import { execText } from "../utils/exec";
  * // Returns GH_TOKEN if set, else GITHUB_TOKEN, else gh CLI output, else ""
  * ```
  */
-export async function resolveToken(): Promise<string> {
+export async function resolveToken(exec: ExecTextFn = execText): Promise<string> {
   // Priority 1: GH_TOKEN
   const ghToken = process.env.GH_TOKEN;
   if (ghToken && ghToken.trim() !== "") {
@@ -36,7 +39,7 @@ export async function resolveToken(): Promise<string> {
 
   // Priority 3: gh CLI
   try {
-    const cliToken = await execText("gh", ["auth", "token"]);
+    const cliToken = await exec("gh", ["auth", "token"]);
     return cliToken.trim();
   } catch {
     // gh CLI failed or not available, return empty string
