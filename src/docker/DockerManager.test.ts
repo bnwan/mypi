@@ -199,4 +199,71 @@ describe("DockerManager", () => {
       ]);
     });
   });
+
+  describe("list", () => {
+    it("should list running containers", async () => {
+      execSpy.mockResolvedValue({
+        stdout: JSON.stringify([
+          {
+            ID: "abc123",
+            Names: "mypi-container",
+            State: "running",
+            Image: "mypi-agent",
+          },
+        ]),
+        stderr: "",
+        exitCode: 0,
+      });
+
+      const containers = await manager.list();
+
+      expect(execSpy).toHaveBeenCalledWith("docker", [
+        "ps",
+        "--filter",
+        "ancestor=mypi-agent",
+        "--format",
+        "json",
+      ]);
+      expect(containers).toHaveLength(1);
+      expect(containers[0].id).toBe("abc123");
+      expect(containers[0].name).toBe("mypi-container");
+    });
+
+    it("should return empty array when no containers running", async () => {
+      execSpy.mockResolvedValue({ stdout: "", stderr: "", exitCode: 0 });
+
+      const containers = await manager.list();
+
+      expect(containers).toEqual([]);
+    });
+
+    it("should filter for custom image name", async () => {
+      execSpy.mockResolvedValue({ stdout: "", stderr: "", exitCode: 0 });
+
+      const customManager = new DockerManager("custom-image");
+      await customManager.list();
+
+      expect(execSpy).toHaveBeenCalledWith("docker", [
+        "ps",
+        "--filter",
+        "ancestor=custom-image",
+        "--format",
+        "json",
+      ]);
+    });
+
+    it("should handle plain text output when json not available", async () => {
+      execSpy.mockResolvedValue({
+        stdout: "mypi-container\nanother-container",
+        stderr: "",
+        exitCode: 0,
+      });
+
+      const containers = await manager.list();
+
+      expect(containers).toHaveLength(2);
+      expect(containers[0].name).toBe("mypi-container");
+      expect(containers[1].name).toBe("another-container");
+    });
+  });
 });

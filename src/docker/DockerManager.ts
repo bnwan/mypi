@@ -20,6 +20,14 @@ export interface RunOptions {
   additionalArgs?: string[];
 }
 
+/** Information about a running container */
+export interface ContainerInfo {
+  id: string;
+  name: string;
+  state: string;
+  image: string;
+}
+
 export class DockerManager {
   private readonly imageName: string;
 
@@ -98,5 +106,47 @@ export class DockerManager {
     }
 
     await exec("docker", args);
+  }
+
+  /**
+   * List running containers for this image
+   * @returns Promise resolving to array of container info
+   */
+  async list(): Promise<ContainerInfo[]> {
+    const result = await exec("docker", [
+      "ps",
+      "--filter",
+      `ancestor=${this.imageName}`,
+      "--format",
+      "json",
+    ]);
+
+    const output = result.stdout.trim();
+    if (!output) {
+      return [];
+    }
+
+    try {
+      const parsed = JSON.parse(output);
+      // Handle both single object and array of objects
+      const containers = Array.isArray(parsed) ? parsed : [parsed];
+      return containers.map((c: Record<string, string>) => ({
+        id: c.ID || "",
+        name: c.Names || "",
+        state: c.State || "",
+        image: c.Image || "",
+      }));
+    } catch {
+      // Fallback to plain text parsing (line-separated names)
+      return output
+        .split("\n")
+        .filter((line) => line.trim())
+        .map((name) => ({
+          id: "",
+          name: name.trim(),
+          state: "running",
+          image: this.imageName,
+        }));
+    }
   }
 }
