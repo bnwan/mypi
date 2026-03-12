@@ -13,7 +13,7 @@ import { fileURLToPath } from "url";
  * The name of the agent configuration directory relative to user's home
  * This directory stores agent-specific configuration files.
  */
-export const CONFIG_DIR_NAME = ".mypi/agent";
+export const CONFIG_DIR_RELATIVE_PATH = ".mypi/agent";
 
 /**
  * Expands a tilde (~) in a path to the user's home directory
@@ -43,6 +43,10 @@ export function expandHomeDir(inputPath: string): string {
   if (inputPath.startsWith("~/")) {
     const homeDir = process.env.HOME ?? os.homedir();
     const remainder = inputPath.slice(2); // remove leading "~/"
+    // Handle "~/" case to avoid trailing separator
+    if (remainder === "") {
+      return homeDir;
+    }
     return path.join(homeDir, remainder);
   }
 
@@ -68,7 +72,7 @@ export function resolveConfigDir(): string {
       "Could not determine home directory. HOME environment variable and os.homedir() both returned empty."
     );
   }
-  return path.join(home, CONFIG_DIR_NAME);
+  return path.join(home, CONFIG_DIR_RELATIVE_PATH);
 }
 
 /**

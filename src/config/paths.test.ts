@@ -4,7 +4,7 @@ import {
   resolveConfigDir,
   resolveWorkspacePath,
   resolveScriptDir,
-  CONFIG_DIR_NAME,
+  CONFIG_DIR_RELATIVE_PATH,
 } from "./paths";
 import * as os from "os";
 import * as path from "path";
@@ -154,9 +154,9 @@ describe("paths", () => {
     });
   });
 
-  describe("CONFIG_DIR_NAME constant", () => {
+  describe("CONFIG_DIR_RELATIVE_PATH constant", () => {
     test("has correct value", () => {
-      expect(CONFIG_DIR_NAME).toBe(".mypi/agent");
+      expect(CONFIG_DIR_RELATIVE_PATH).toBe(".mypi/agent");
     });
   });
 });
