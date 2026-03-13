@@ -1,2 +1,3 @@
 // CLI module - argument parsing and command handling
-export {};
+export { parseArgs } from "./parseArgs";
+export type { ParsedArgs } from "./parseArgs";
