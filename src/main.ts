@@ -16,6 +16,7 @@ import { DockerManager } from "./docker/DockerManager";
 import type { ContainerInfo, RunOptions } from "./docker/DockerManager";
 import { resolveConfigDir } from "./config/paths";
 import { resolveToken } from "./config/tokens";
+import { syncPiConfig } from "./config/sync";
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -28,6 +29,14 @@ const PROJECT_ROOT = path.resolve(
 );
 
 const DOCKERFILE_PATH = path.join(PROJECT_ROOT, "Dockerfile");
+
+/**
+ * Project-local .pi/ directory — the Docker build context for pi config.
+ * Synced from ~/.pi before each build so the image always reflects the
+ * user's current global pi setup. Separate from the runtime config mount
+ * (~/.mypi/agent) which is handled by the volume binding in DockerManager.
+ */
+const LOCAL_PI_DIR = path.join(PROJECT_ROOT, ".pi");
 
 /** Environment variable names forwarded from host into the container */
 const PASSTHROUGH_ENV_VARS = [
@@ -85,6 +94,8 @@ export interface RunDeps {
   getToken?: () => Promise<string>;
   /** mkdir -p implementation (or mock); defaults to fs.mkdirSync */
   mkdirp?: (dir: string) => void;
+  /** Sync ~/.pi into local .pi/ before build (or mock) */
+  syncConfig?: (dest: string) => Promise<void>;
 }
 
 // ── Core run function (exported for tests) ─────────────────────────────────
@@ -121,6 +132,7 @@ export async function run(
     deps.docker ?? new DockerManager(IMAGE_NAME);
   const getToken = deps.getToken ?? resolveToken;
   const mkdirp = deps.mkdirp ?? ((dir: string) => fs.mkdirSync(dir, { recursive: true }));
+  const doSyncConfig = deps.syncConfig ?? syncPiConfig;
 
   // 3. List
   if (args.list) {
@@ -164,6 +176,7 @@ export async function run(
     // args.build is true — this is intentional to save a docker round-trip.
     const needsBuild = args.build || !(await docker.imageExists());
     if (needsBuild) {
+      await doSyncConfig(LOCAL_PI_DIR);
       console.log("Building Docker image…");
       await docker.build(DOCKERFILE_PATH);
       console.log("Build complete.");

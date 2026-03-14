@@ -314,6 +314,42 @@ describe("main > run flow (--build flag forces rebuild)", () => {
     const dockerfilePath = (spies.build.mock.calls[0] as [string])[0];
     expect(dockerfilePath).toMatch(/Dockerfile$/);
   });
+
+  it("calls syncConfig before build when --build is passed", async () => {
+    const order: string[] = [];
+    const syncConfig = mock(async () => { order.push("sync"); });
+    const { docker, getToken } = makeDefaultDeps({
+      imageExists: mock(async () => true),
+      build: mock(async () => { order.push("build"); }),
+    });
+    await run(["--build"], { docker, getToken, mkdirp: mkdirpStub, syncConfig });
+    expect(order).toEqual(["sync", "build"]);
+  });
+
+  it("calls syncConfig before auto-build when image is missing", async () => {
+    const order: string[] = [];
+    const syncConfig = mock(async () => { order.push("sync"); });
+    const { docker, getToken } = makeDefaultDeps({
+      imageExists: mock(async () => false),
+      build: mock(async () => { order.push("build"); }),
+    });
+    await run([], { docker, getToken, mkdirp: mkdirpStub, syncConfig });
+    expect(order).toEqual(["sync", "build"]);
+  });
+
+  it("does not call syncConfig when no build is needed", async () => {
+    const syncConfig = mock(async () => {});
+    const { docker, getToken } = makeDefaultDeps({ imageExists: mock(async () => true) });
+    await run([], { docker, getToken, mkdirp: mkdirpStub, syncConfig });
+    expect(syncConfig).not.toHaveBeenCalled();
+  });
+
+  it("returns exit code 1 when syncConfig throws", async () => {
+    const syncConfig = mock(async () => { throw new Error("sync failed"); });
+    const { docker, getToken } = makeDefaultDeps({ imageExists: mock(async () => true) });
+    const code = await run(["--build"], { docker, getToken, mkdirp: mkdirpStub, syncConfig });
+    expect(code).toBe(1);
+  });
 });
 
 describe("main > error handling", () => {
