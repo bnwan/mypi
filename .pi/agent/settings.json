@@ -1,22 +1,6 @@
 {
-  "defaultProvider": "ollama",
   "defaultModel": "kimi-k2.5:cloud",
-  "defaultThinkingLevel": "medium",
-  "theme": "dark",
-  "compaction": {
-    "enabled": true,
-    "reserveTokens": 16384,
-    "keepRecentTokens": 20000
-  },
-  "retry": {
-    "enabled": true,
-    "maxRetries": 3,
-    "baseDelayMs": 2000,
-    "maxDelayMs": 60000
-  },
-  "steeringMode": "one-at-a-time",
-  "followUpMode": "one-at-a-time",
-  "transport": "sse",
-  "enableSkillCommands": true,
-  "quietStartup": false
+  "defaultProvider": "ollama",
+  "defaultThinkingLevel": "off",
+  "lastChangelogVersion": "0.57.1"
 }

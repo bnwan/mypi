@@ -1,6 +1,6 @@
-# Standup Report
+# Status Report
 
-Generate a daily standup report by analyzing recent GitHub activity in this repository.
+Generate a status report by analyzing recent GitHub activity in this repository.
 
 ## Steps
 
@@ -16,7 +16,7 @@ Generate a daily standup report by analyzing recent GitHub activity in this repo
 ## Output Format
 
 ```
-# Daily Standup — {{date}}
+# Status Report — {{date}}
 
 ## ✅ Done (Last 24-48h)
 - PR #N: {{title}} ({{repository}}) — merged {{date}}

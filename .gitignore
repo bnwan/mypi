@@ -29,3 +29,8 @@ coverage/
 # Temp files
 *.tmp
 *.temp
+
+# Pi agent local config (contains secrets and session data)
+.pi/agent/auth.json
+.pi/agent/sessions/
+.pi/agent/bin/

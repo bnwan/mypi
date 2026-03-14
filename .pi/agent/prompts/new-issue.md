@@ -1,6 +1,10 @@
+---
+description: Turn a rough idea into a properly scoped GitHub issue
+---
+
 # Create New Issue
 
-Turn a rough idea into a properly scoped GitHub issue. The user will provide an idea like: "add dark mode support to the settings panel"
+Turn this idea into a properly scoped GitHub issue: **$@**
 
 ## Steps
 

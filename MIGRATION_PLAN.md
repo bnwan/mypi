@@ -197,13 +197,13 @@ Migrate the `mypi` shell script to a proper Bun/TypeScript codebase with modular
 
 ## Migration Checklist
 
-- [ ] Phase 1 complete - Project structure
-- [ ] Phase 2 complete - Utilities with tests
-- [ ] Phase 3 complete - Config with tests
-- [ ] Phase 4 complete - Docker with tests
-- [ ] Phase 5 complete - CLI with tests
-- [ ] Phase 6 complete - Main integration
-- [ ] Phase 7 complete - Wrapper & docs
-- [ ] All existing functionality preserved
-- [ ] Tests passing in CI
-- [ ] Old shell script removed
+- [x] Phase 1 complete - Project structure
+- [x] Phase 2 complete - Utilities with tests
+- [x] Phase 3 complete - Config with tests
+- [x] Phase 4 complete - Docker with tests
+- [x] Phase 5 complete - CLI with tests
+- [x] Phase 6 complete - Main integration
+- [x] Phase 7 complete - Wrapper & docs
+- [x] All existing functionality preserved
+- [x] Tests passing in CI
+- [x] Old shell script removed
