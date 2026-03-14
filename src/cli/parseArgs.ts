@@ -1,53 +1,49 @@
 /**
  * CLI argument parser for mypi
- * Parses mypi-specific flags and collects remaining args as passthrough to pi
+ * Parses argv into a strongly-typed ParsedArgs object.
  */
 
-/** Parsed CLI arguments */
+import * as path from "path";
+
+/** Result of parsing mypi CLI arguments */
 export interface ParsedArgs {
-  /** Whether to rebuild the Docker image */
-  build: boolean;
-  /** Named container instance */
+  /** Named container instance (--name NAME) */
   name?: string;
-  /** Workspace path to mount */
-  workspace?: string;
-  /** List running containers */
+  /** Workspace path to mount, resolved to absolute (default: cwd) */
+  workspace: string;
+  /** Rebuild the Docker image before running (--build) */
+  build: boolean;
+  /** List running mypi containers (--list) */
   list: boolean;
-  /** Container name/id to stop */
+  /** Stop a named container (--stop NAME) */
   stop?: string;
-  /** Show help text */
+  /** Show help text (--help | -h) */
   help: boolean;
-  /** Remaining args passed through to pi */
-  extraArgs: string[];
+  /** Remaining arguments passed through to pi */
+  piArgs: string[];
 }
 
 /**
- * Parses process.argv-style arguments for mypi
+ * Parse mypi command-line arguments.
  *
- * Recognised mypi flags:
- *   --build             Rebuild the Docker image
- *   --name NAME         Start a named container instance
- *   --name=NAME         (alternative syntax)
- *   --workspace PATH    Mount a different workspace directory
- *   --workspace=PATH    (alternative syntax)
- *   --list              List running mypi containers
- *   --stop NAME         Stop a named container
- *   --stop=NAME         (alternative syntax)
- *   --help / -h         Show help
- *   --                  All subsequent args are forwarded to pi
- *
- * Any unrecognised argument (and all args that follow it) are collected
- * into `extraArgs` and forwarded verbatim to the pi entrypoint.
- *
- * @param argv - Argument list (typically process.argv.slice(2))
+ * @param argv - Raw argument list (e.g. process.argv.slice(2))
+ * @param cwd  - Working directory used to resolve relative workspace paths
+ *               (defaults to process.cwd())
  * @returns Parsed argument object
+ * @throws {Error} On missing values or invalid flag combinations
  */
-export function parseArgs(argv: string[]): ParsedArgs {
+export function parseArgs(
+  argv: string[],
+  cwd: string = process.cwd()
+): ParsedArgs {
   const result: ParsedArgs = {
     build: false,
     list: false,
     help: false,
-    extraArgs: [],
+    workspace: cwd,
+    name: undefined,
+    stop: undefined,
+    piArgs: [],
   };
 
   let i = 0;
@@ -55,12 +51,13 @@ export function parseArgs(argv: string[]): ParsedArgs {
   while (i < argv.length) {
     const arg = argv[i];
 
-    // -- separator: everything after is forwarded to pi
+    // -- separator: everything after goes to piArgs
     if (arg === "--") {
-      result.extraArgs.push(...argv.slice(i + 1));
+      result.piArgs = argv.slice(i + 1);
       break;
     }
 
+    // Boolean flags
     if (arg === "--build") {
       result.build = true;
       i++;
@@ -79,52 +76,99 @@ export function parseArgs(argv: string[]): ParsedArgs {
       continue;
     }
 
-    // --name NAME or --name=NAME
-    if (arg === "--name") {
-      const val = argv[i + 1];
-      if (!val || val.startsWith("--")) throw new Error("--name requires a value");
-      result.name = val;
-      i += 2;
-      continue;
-    }
-    if (arg.startsWith("--name=")) {
-      result.name = arg.slice("--name=".length);
+    // --name NAME | --name=NAME
+    if (arg === "--name" || arg.startsWith("--name=")) {
+      const value = extractValue(arg, "--name", argv[i + 1]);
+      if (value.tookNextToken) i++;
+      result.name = value.str;
       i++;
       continue;
     }
 
-    // --workspace PATH or --workspace=PATH
-    if (arg === "--workspace") {
-      const val = argv[i + 1];
-      if (!val || val.startsWith("--")) throw new Error("--workspace requires a value");
-      result.workspace = val;
-      i += 2;
-      continue;
-    }
-    if (arg.startsWith("--workspace=")) {
-      result.workspace = arg.slice("--workspace=".length);
+    // --workspace PATH | --workspace=PATH
+    if (arg === "--workspace" || arg.startsWith("--workspace=")) {
+      const value = extractValue(arg, "--workspace", argv[i + 1]);
+      if (value.tookNextToken) i++;
+      // Resolve relative paths against cwd
+      result.workspace = path.isAbsolute(value.str)
+        ? value.str
+        : path.resolve(cwd, value.str);
       i++;
       continue;
     }
 
-    // --stop NAME or --stop=NAME
-    if (arg === "--stop") {
-      const val = argv[i + 1];
-      if (!val || val.startsWith("--")) throw new Error("--stop requires a value");
-      result.stop = val;
-      i += 2;
-      continue;
-    }
-    if (arg.startsWith("--stop=")) {
-      result.stop = arg.slice("--stop=".length);
+    // --stop NAME | --stop=NAME
+    if (arg === "--stop" || arg.startsWith("--stop=")) {
+      const value = extractValue(arg, "--stop", argv[i + 1]);
+      if (value.tookNextToken) i++;
+      result.stop = value.str;
       i++;
       continue;
     }
 
-    // Unknown arg — collect this and all remaining args as passthrough
-    result.extraArgs.push(...argv.slice(i));
+    // Unknown flags: forward to pi as passthrough args (consistent with legacy
+    // mypi shell script, which passes unrecognized tokens straight to pi).
+    // Use -- to explicitly separate mypi flags from pi flags if ambiguity arises.
+    if (arg.startsWith("-")) {
+      result.piArgs = argv.slice(i);
+      break;
+    }
+
+    // Non-flag args: once a bare (non-flag) arg is seen, treat it and all
+    // remaining args as piArgs (stop scanning mypi flags).
+    result.piArgs = argv.slice(i);
     break;
   }
 
+  // Validate combinations
+  if (result.list && result.name !== undefined) {
+    throw new Error("--list cannot be combined with --name");
+  }
+  if (result.list && result.stop !== undefined) {
+    throw new Error("--list cannot be combined with --stop");
+  }
+  if (result.stop !== undefined && result.name !== undefined) {
+    throw new Error("--stop cannot be combined with --name");
+  }
+
   return result;
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+interface ExtractedValue {
+  str: string;
+  /** true when the value was taken from the next argv token (caller must advance i by one extra) */
+  tookNextToken: boolean;
+}
+
+/**
+ * Extract a required string value for a flag, supporting both
+ * `--flag value` and `--flag=value` forms.
+ *
+ * @param arg      - The current argv token (e.g. "--name" or "--name=foo")
+ * @param flag     - The flag name prefix (e.g. "--name")
+ * @param nextArg  - The next argv token, if any (argv[i + 1])
+ */
+function extractValue(
+  arg: string,
+  flag: string,
+  nextArg: string | undefined
+): ExtractedValue {
+  // --flag=value form
+  if (arg.startsWith(`${flag}=`)) {
+    const str = arg.slice(flag.length + 1);
+    if (!str) {
+      throw new Error(`${flag} requires a value`);
+    }
+    return { str, tookNextToken: false };
+  }
+
+  // --flag value form: use next token as the value.
+  // Only reject a missing token — values starting with "-" are valid
+  // (e.g. container names or paths like "-tmp").
+  if (nextArg === undefined) {
+    throw new Error(`${flag} requires a value`);
+  }
+  return { str: nextArg, tookNextToken: true };
 }

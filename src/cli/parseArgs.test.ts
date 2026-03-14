@@ -1,173 +1,248 @@
-import { describe, expect, it } from "bun:test";
+import { describe, it, expect } from "bun:test";
 import { parseArgs } from "./parseArgs";
+import * as path from "path";
+
+// Use a fixed cwd for predictable absolute path resolution in tests
+const TEST_CWD = "/test/workspace";
 
 describe("parseArgs", () => {
-  describe("--build flag", () => {
-    it("should default build to false", () => {
-      const result = parseArgs([]);
-      expect(result.build).toBe(false);
+  // ── Defaults ──────────────────────────────────────────────────────────────
+
+  describe("defaults", () => {
+    it("returns default values when no args provided", () => {
+      const result = parseArgs([], TEST_CWD);
+      expect(result).toEqual({
+        build: false,
+        list: false,
+        help: false,
+        workspace: TEST_CWD,
+        name: undefined,
+        stop: undefined,
+        piArgs: [],
+      });
     });
 
-    it("should set build to true when --build is passed", () => {
-      const result = parseArgs(["--build"]);
+    it("uses process.cwd() as workspace default when no cwd argument given", () => {
+      const result = parseArgs([]);
+      expect(result.workspace).toBe(process.cwd());
+    });
+  });
+
+  // ── --build ───────────────────────────────────────────────────────────────
+
+  describe("--build flag", () => {
+    it("sets build to true", () => {
+      const result = parseArgs(["--build"], TEST_CWD);
       expect(result.build).toBe(true);
     });
+
+    it("can be combined with other flags", () => {
+      const result = parseArgs(["--build", "--name", "mydev"], TEST_CWD);
+      expect(result.build).toBe(true);
+      expect(result.name).toBe("mydev");
+    });
   });
+
+  // ── --name ────────────────────────────────────────────────────────────────
 
   describe("--name flag", () => {
-    it("should default name to undefined", () => {
-      const result = parseArgs([]);
-      expect(result.name).toBeUndefined();
+    it("parses --name NAME (space form)", () => {
+      const result = parseArgs(["--name", "mydev"], TEST_CWD);
+      expect(result.name).toBe("mydev");
     });
 
-    it("should parse --name with a space-separated value", () => {
-      const result = parseArgs(["--name", "my-container"]);
-      expect(result.name).toBe("my-container");
+    it("parses --name=NAME (equals form)", () => {
+      const result = parseArgs(["--name=mydev"], TEST_CWD);
+      expect(result.name).toBe("mydev");
     });
 
-    it("should parse --name=value syntax", () => {
-      const result = parseArgs(["--name=my-container"]);
-      expect(result.name).toBe("my-container");
+    it("accepts a value that starts with - (e.g. -tmp)", () => {
+      const result = parseArgs(["--name", "-tmp"], TEST_CWD);
+      expect(result.name).toBe("-tmp");
+    });
+
+    it("throws when --name is missing its value", () => {
+      expect(() => parseArgs(["--name"], TEST_CWD)).toThrow(
+        "--name requires a value"
+      );
+    });
+
+    it("last --name wins when flag is duplicated", () => {
+      const result = parseArgs(["--name", "first", "--name", "second"], TEST_CWD);
+      expect(result.name).toBe("second");
     });
   });
+
+  // ── --workspace ───────────────────────────────────────────────────────────
 
   describe("--workspace flag", () => {
-    it("should default workspace to undefined", () => {
-      const result = parseArgs([]);
-      expect(result.workspace).toBeUndefined();
+    it("parses absolute path unchanged", () => {
+      const result = parseArgs(["--workspace", "/home/user/project"], TEST_CWD);
+      expect(result.workspace).toBe("/home/user/project");
     });
 
-    it("should parse --workspace with a space-separated value", () => {
-      const result = parseArgs(["--workspace", "/some/path"]);
-      expect(result.workspace).toBe("/some/path");
+    it("parses relative path resolved against cwd (space form)", () => {
+      const result = parseArgs(["--workspace", "./myproject"], TEST_CWD);
+      expect(result.workspace).toBe(path.resolve(TEST_CWD, "./myproject"));
     });
 
-    it("should parse --workspace=value syntax", () => {
-      const result = parseArgs(["--workspace=/some/path"]);
-      expect(result.workspace).toBe("/some/path");
+    it("parses relative path resolved against cwd (equals form)", () => {
+      const result = parseArgs(["--workspace=./myproject"], TEST_CWD);
+      expect(result.workspace).toBe(path.resolve(TEST_CWD, "./myproject"));
     });
 
-    it("should accept relative paths", () => {
-      const result = parseArgs(["--workspace", "./relative/path"]);
-      expect(result.workspace).toBe("./relative/path");
+    it("throws when --workspace is missing its value", () => {
+      expect(() => parseArgs(["--workspace"], TEST_CWD)).toThrow(
+        "--workspace requires a value"
+      );
     });
   });
 
-  describe("--list flag", () => {
-    it("should default list to false", () => {
-      const result = parseArgs([]);
-      expect(result.list).toBe(false);
-    });
+  // ── --list ────────────────────────────────────────────────────────────────
 
-    it("should set list to true when --list is passed", () => {
-      const result = parseArgs(["--list"]);
+  describe("--list flag", () => {
+    it("sets list to true", () => {
+      const result = parseArgs(["--list"], TEST_CWD);
       expect(result.list).toBe(true);
     });
   });
 
+  // ── --stop ────────────────────────────────────────────────────────────────
+
   describe("--stop flag", () => {
-    it("should default stop to undefined", () => {
-      const result = parseArgs([]);
-      expect(result.stop).toBeUndefined();
+    it("parses --stop NAME (space form)", () => {
+      const result = parseArgs(["--stop", "mydev"], TEST_CWD);
+      expect(result.stop).toBe("mydev");
     });
 
-    it("should parse --stop with a space-separated value", () => {
-      const result = parseArgs(["--stop", "my-container"]);
-      expect(result.stop).toBe("my-container");
+    it("parses --stop=NAME (equals form)", () => {
+      const result = parseArgs(["--stop=mydev"], TEST_CWD);
+      expect(result.stop).toBe("mydev");
     });
 
-    it("should parse --stop=value syntax", () => {
-      const result = parseArgs(["--stop=my-container"]);
-      expect(result.stop).toBe("my-container");
+    it("throws when --stop is missing its value", () => {
+      expect(() => parseArgs(["--stop"], TEST_CWD)).toThrow(
+        "--stop requires a value"
+      );
     });
   });
+
+  // ── --help ────────────────────────────────────────────────────────────────
 
   describe("--help / -h flag", () => {
-    it("should set help to true when --help is passed", () => {
-      const result = parseArgs(["--help"]);
+    it("sets help to true for --help", () => {
+      const result = parseArgs(["--help"], TEST_CWD);
       expect(result.help).toBe(true);
     });
 
-    it("should set help to true when -h is passed", () => {
-      const result = parseArgs(["-h"]);
+    it("sets help to true for -h", () => {
+      const result = parseArgs(["-h"], TEST_CWD);
       expect(result.help).toBe(true);
     });
+  });
 
-    it("should default help to false", () => {
-      const result = parseArgs([]);
-      expect(result.help).toBe(false);
+  // ── piArgs (passthrough) ──────────────────────────────────────────────────
+
+  describe("piArgs passthrough", () => {
+    it("collects bare trailing args as piArgs", () => {
+      const result = parseArgs(["--build", "some-task", "another"], TEST_CWD);
+      expect(result.piArgs).toEqual(["some-task", "another"]);
+    });
+
+    it("collects everything after -- as piArgs", () => {
+      const result = parseArgs(
+        ["--build", "--", "--some-pi-flag", "value"],
+        TEST_CWD
+      );
+      expect(result.piArgs).toEqual(["--some-pi-flag", "value"]);
+    });
+
+    it("collects nothing when no trailing args", () => {
+      const result = parseArgs(["--build"], TEST_CWD);
+      expect(result.piArgs).toEqual([]);
+    });
+
+    it("treats args before -- as mypi flags and after as piArgs", () => {
+      const result = parseArgs(
+        ["--name", "dev", "--", "--model", "gpt4"],
+        TEST_CWD
+      );
+      expect(result.name).toBe("dev");
+      expect(result.piArgs).toEqual(["--model", "gpt4"]);
+    });
+
+    it("forwards unknown flags to piArgs (passthrough to pi)", () => {
+      const result = parseArgs(["--build", "--model", "gpt4"], TEST_CWD);
+      expect(result.build).toBe(true);
+      expect(result.piArgs).toEqual(["--model", "gpt4"]);
+    });
+
+    it("collects flags and subsequent args when bare arg precedes a flag", () => {
+      const result = parseArgs(["foo", "--build"], TEST_CWD);
+      expect(result.piArgs).toEqual(["foo", "--build"]);
     });
   });
 
-  describe("passthrough args", () => {
-    it("should default extraArgs to empty array", () => {
-      const result = parseArgs([]);
-      expect(result.extraArgs).toEqual([]);
+  // ── Invalid combinations ──────────────────────────────────────────────────
+
+  describe("invalid combinations", () => {
+    it("throws when --list and --name are combined", () => {
+      expect(() => parseArgs(["--list", "--name", "dev"], TEST_CWD)).toThrow(
+        "--list cannot be combined with --name"
+      );
     });
 
-    it("should collect unknown args as passthrough args", () => {
-      const result = parseArgs(["--some-pi-flag", "value"]);
-      expect(result.extraArgs).toEqual(["--some-pi-flag", "value"]);
+    it("throws when --list and --stop are combined", () => {
+      expect(() => parseArgs(["--list", "--stop", "dev"], TEST_CWD)).toThrow(
+        "--list cannot be combined with --stop"
+      );
     });
 
-    it("should collect args after -- as passthrough args", () => {
-      const result = parseArgs(["--", "--pi-flag", "value"]);
-      expect(result.extraArgs).toEqual(["--pi-flag", "value"]);
-    });
-
-    it("should stop collecting mypi flags after -- separator", () => {
-      const result = parseArgs(["--build", "--", "--build"]);
-      expect(result.build).toBe(true);
-      expect(result.extraArgs).toEqual(["--build"]);
-    });
-
-    it("should collect all args after a non-mypi flag", () => {
-      const result = parseArgs(["--build", "--workspace", "/path", "some-task", "--pi-option"]);
-      expect(result.build).toBe(true);
-      expect(result.workspace).toBe("/path");
-      expect(result.extraArgs).toEqual(["some-task", "--pi-option"]);
+    it("throws when --stop and --name are combined", () => {
+      expect(() => parseArgs(["--stop", "dev", "--name", "foo"], TEST_CWD)).toThrow(
+        "--stop cannot be combined with --name"
+      );
     });
   });
 
-  describe("combined flags", () => {
-    it("should parse multiple mypi flags together", () => {
-      const result = parseArgs(["--build", "--name", "mybox", "--workspace", "/work"]);
+  // ── Combined real-world scenarios ─────────────────────────────────────────
+
+  describe("real-world combinations", () => {
+    it("parses a typical named run with workspace and piArgs", () => {
+      const result = parseArgs(
+        ["--name", "dev", "--workspace", "/projects/foo", "--", "implement", "#42"],
+        TEST_CWD
+      );
+      expect(result).toEqual({
+        name: "dev",
+        workspace: "/projects/foo",
+        build: false,
+        list: false,
+        stop: undefined,
+        help: false,
+        piArgs: ["implement", "#42"],
+      });
+    });
+
+    it("parses build + named run", () => {
+      const result = parseArgs(["--build", "--name", "fresh"], TEST_CWD);
       expect(result.build).toBe(true);
-      expect(result.name).toBe("mybox");
-      expect(result.workspace).toBe("/work");
-      expect(result.extraArgs).toEqual([]);
+      expect(result.name).toBe("fresh");
     });
 
-    it("should separate mypi flags from pi passthrough args", () => {
-      const result = parseArgs(["--name", "box", "implement", "feature"]);
-      expect(result.name).toBe("box");
-      expect(result.extraArgs).toEqual(["implement", "feature"]);
-    });
-  });
-
-  describe("missing-value errors", () => {
-    it("should throw when --name is provided with no value", () => {
-      expect(() => parseArgs(["--name"])).toThrow("--name requires a value");
+    it("parses stop command standalone", () => {
+      const result = parseArgs(["--stop", "dev"], TEST_CWD);
+      expect(result.stop).toBe("dev");
+      expect(result.list).toBe(false);
     });
 
-    it("should throw when --name is followed by another flag", () => {
-      expect(() => parseArgs(["--name", "--build"])).toThrow("--name requires a value");
-    });
-
-    it("should throw when --workspace is provided with no value", () => {
-      expect(() => parseArgs(["--workspace"])).toThrow("--workspace requires a value");
-    });
-
-    it("should throw when --workspace is followed by another flag", () => {
-      expect(() => parseArgs(["--workspace", "--list"])).toThrow("--workspace requires a value");
-    });
-
-    it("should throw when --stop is provided with no value", () => {
-      expect(() => parseArgs(["--stop"])).toThrow("--stop requires a value");
-    });
-
-    it("should throw when --stop is followed by another flag", () => {
-      expect(() => parseArgs(["--stop", "--build"])).toThrow("--stop requires a value");
+    it("forwards pi flags without -- separator", () => {
+      const result = parseArgs(
+        ["--name", "dev", "--model", "gpt4", "some task"],
+        TEST_CWD
+      );
+      expect(result.name).toBe("dev");
+      expect(result.piArgs).toEqual(["--model", "gpt4", "some task"]);
     });
   });
 });
