@@ -30,7 +30,7 @@ export interface ParsedArgs {
  * @param cwd  - Working directory used to resolve relative workspace paths
  *               (defaults to process.cwd())
  * @returns Parsed argument object
- * @throws {Error} On unknown flags, missing values, or invalid combinations
+ * @throws {Error} On missing values or invalid flag combinations
  */
 export function parseArgs(
   argv: string[],
@@ -78,8 +78,8 @@ export function parseArgs(
 
     // --name NAME | --name=NAME
     if (arg === "--name" || arg.startsWith("--name=")) {
-      const value = extractValue(arg, "--name", argv, i);
-      if (value.consumed) i++;
+      const value = extractValue(arg, "--name", argv[i + 1]);
+      if (value.tookNextToken) i++;
       result.name = value.str;
       i++;
       continue;
@@ -87,8 +87,8 @@ export function parseArgs(
 
     // --workspace PATH | --workspace=PATH
     if (arg === "--workspace" || arg.startsWith("--workspace=")) {
-      const value = extractValue(arg, "--workspace", argv, i);
-      if (value.consumed) i++;
+      const value = extractValue(arg, "--workspace", argv[i + 1]);
+      if (value.tookNextToken) i++;
       // Resolve relative paths against cwd
       result.workspace = path.isAbsolute(value.str)
         ? value.str
@@ -99,19 +99,23 @@ export function parseArgs(
 
     // --stop NAME | --stop=NAME
     if (arg === "--stop" || arg.startsWith("--stop=")) {
-      const value = extractValue(arg, "--stop", argv, i);
-      if (value.consumed) i++;
+      const value = extractValue(arg, "--stop", argv[i + 1]);
+      if (value.tookNextToken) i++;
       result.stop = value.str;
       i++;
       continue;
     }
 
-    // Unknown flags
+    // Unknown flags: forward to pi as passthrough args (consistent with legacy
+    // mypi shell script, which passes unrecognized tokens straight to pi).
+    // Use -- to explicitly separate mypi flags from pi flags if ambiguity arises.
     if (arg.startsWith("-")) {
-      throw new Error(`Unknown flag: ${arg}`);
+      result.piArgs = argv.slice(i);
+      break;
     }
 
-    // Non-flag args: collect as piArgs (stop scanning for mypi flags)
+    // Non-flag args: once a bare (non-flag) arg is seen, treat it and all
+    // remaining args as piArgs (stop scanning mypi flags).
     result.piArgs = argv.slice(i);
     break;
   }
@@ -123,6 +127,9 @@ export function parseArgs(
   if (result.list && result.stop !== undefined) {
     throw new Error("--list cannot be combined with --stop");
   }
+  if (result.stop !== undefined && result.name !== undefined) {
+    throw new Error("--stop cannot be combined with --name");
+  }
 
   return result;
 }
@@ -131,19 +138,22 @@ export function parseArgs(
 
 interface ExtractedValue {
   str: string;
-  /** true when the value was taken from the next argv token (i needs an extra increment) */
-  consumed: boolean;
+  /** true when the value was taken from the next argv token (caller must advance i by one extra) */
+  tookNextToken: boolean;
 }
 
 /**
  * Extract a required string value for a flag, supporting both
  * `--flag value` and `--flag=value` forms.
+ *
+ * @param arg      - The current argv token (e.g. "--name" or "--name=foo")
+ * @param flag     - The flag name prefix (e.g. "--name")
+ * @param nextArg  - The next argv token, if any (argv[i + 1])
  */
 function extractValue(
   arg: string,
   flag: string,
-  argv: string[],
-  i: number
+  nextArg: string | undefined
 ): ExtractedValue {
   // --flag=value form
   if (arg.startsWith(`${flag}=`)) {
@@ -151,13 +161,14 @@ function extractValue(
     if (!str) {
       throw new Error(`${flag} requires a value`);
     }
-    return { str, consumed: false };
+    return { str, tookNextToken: false };
   }
 
-  // --flag value form: peek at next token
-  const next = argv[i + 1];
-  if (!next || next.startsWith("-")) {
+  // --flag value form: use next token as the value.
+  // Only reject a missing token — values starting with "-" are valid
+  // (e.g. container names or paths like "-tmp").
+  if (nextArg === undefined) {
     throw new Error(`${flag} requires a value`);
   }
-  return { str: next, consumed: true };
+  return { str: nextArg, tookNextToken: true };
 }
