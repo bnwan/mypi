@@ -12,11 +12,16 @@ import * as os from "os";
 
 /** Dependency injection interface — makes the function fully unit-testable */
 export interface SyncDeps {
-  /** Returns the current user's home directory */
+  /**
+   * Returns the current user's home directory.
+   * Called lazily at runtime (not captured at import time).
+   */
   homedir: () => string;
   /** Returns true if the given path exists */
   exists: (p: string) => Promise<boolean>;
-  /** Recursively copies src into dest */
+  /** Removes the given path recursively (no-op if it doesn't exist) */
+  rm: (p: string) => Promise<void>;
+  /** Recursively copies src into dest (dest must not exist beforehand) */
   copy: (src: string, dest: string) => Promise<void>;
   /** Log output function */
   log: (msg: string) => void;
@@ -24,6 +29,8 @@ export interface SyncDeps {
 
 /** Production implementations of SyncDeps */
 const defaultDeps: SyncDeps = {
+  // homedir is a function reference — called lazily each time syncPiConfig
+  // runs, so it always reflects the real home dir at call time.
   homedir: os.homedir,
   exists: async (p: string) => {
     try {
@@ -33,16 +40,25 @@ const defaultDeps: SyncDeps = {
       return false;
     }
   },
+  rm: (p: string) => fs.promises.rm(p, { recursive: true, force: true }),
   copy: (src: string, dest: string) =>
     fs.promises.cp(src, dest, { recursive: true }),
   log: console.log,
 };
 
 /**
- * Copies ~/.pi into the given dest directory before a Docker build.
+ * Syncs ~/.pi into the given dest directory before a Docker build.
  *
- * - If ~/.pi exists: logs and copies (global wins, full overwrite)
+ * Performs a true overwrite: removes dest first, then copies src in full,
+ * so the result exactly mirrors ~/.pi with no stale files left behind.
+ *
+ * - If ~/.pi exists: removes dest, copies src → dest (global wins)
  * - If ~/.pi does not exist: logs a skip message and returns without error
+ *
+ * Note: dest is the project-local .pi/ directory. Syncing here is
+ * intentional — it's the Docker build context that the Dockerfile COPYs
+ * from. The runtime config mount (~/.mypi/agent) is a separate concern
+ * handled by the volume binding in DockerManager.run().
  *
  * @param dest  - Destination path (typically <project>/.pi)
  * @param deps  - Optional dependency overrides (for testing)
@@ -59,5 +75,6 @@ export async function syncPiConfig(
   }
 
   deps.log(`Copying ~/.pi → ${dest}...`);
+  await deps.rm(dest);
   await deps.copy(src, dest);
 }

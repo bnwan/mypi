@@ -11,7 +11,6 @@ import { describe, it, expect, mock, beforeEach } from "bun:test";
 import { run } from "./main";
 import type { DockerManagerLike } from "./main";
 import type { ContainerInfo, RunOptions } from "./docker/DockerManager";
-import type { SyncDeps } from "./config/sync";
 
 // ── Mock factory ───────────────────────────────────────────────────────────
 
