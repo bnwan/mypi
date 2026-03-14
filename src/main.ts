@@ -8,6 +8,7 @@
  * caller that maps the return code to `process.exit()`.
  */
 
+import * as fs from "fs";
 import * as path from "path";
 import { fileURLToPath } from "url";
 import { parseArgs } from "./cli/parseArgs";
@@ -27,6 +28,14 @@ const PROJECT_ROOT = path.resolve(
 );
 
 const DOCKERFILE_PATH = path.join(PROJECT_ROOT, "Dockerfile");
+
+/** Environment variable names forwarded from host into the container */
+const PASSTHROUGH_ENV_VARS = [
+  "ANTHROPIC_API_KEY",
+  "OPENAI_API_KEY",
+  "GOOGLE_API_KEY",
+  "OPENROUTER_API_KEY",
+] as const;
 
 // ── Help text ──────────────────────────────────────────────────────────────
 
@@ -56,7 +65,11 @@ EXAMPLES
 
 // ── Dependency injection interface ─────────────────────────────────────────
 
-/** Subset of DockerManager used by run() — allows test injection */
+/**
+ * Subset of DockerManager used by run().
+ * Exported as a public seam so callers and tests can provide their own
+ * implementations without depending on the concrete DockerManager class.
+ */
 export interface DockerManagerLike {
   build(dockerfilePath: string): Promise<void>;
   imageExists(): Promise<boolean>;
@@ -70,6 +83,8 @@ export interface RunDeps {
   docker?: DockerManagerLike;
   /** Token resolver (or mock) */
   getToken?: () => Promise<string>;
+  /** mkdir -p implementation (or mock); defaults to fs.mkdirSync */
+  mkdirp?: (dir: string) => void;
 }
 
 // ── Core run function (exported for tests) ─────────────────────────────────
@@ -105,6 +120,7 @@ export async function run(
   const docker: DockerManagerLike =
     deps.docker ?? new DockerManager(IMAGE_NAME);
   const getToken = deps.getToken ?? resolveToken;
+  const mkdirp = deps.mkdirp ?? ((dir: string) => fs.mkdirSync(dir, { recursive: true }));
 
   // 3. List
   if (args.list) {
@@ -143,7 +159,9 @@ export async function run(
 
   // 5. Run (default flow)
   try {
-    // 5a. Build if forced (--build) or image is absent
+    // 5a. Build if forced (--build) or image is absent.
+    // Note: short-circuit evaluation means imageExists() is NOT called when
+    // args.build is true — this is intentional to save a docker round-trip.
     const needsBuild = args.build || !(await docker.imageExists());
     if (needsBuild) {
       console.log("Building Docker image…");
@@ -154,17 +172,33 @@ export async function run(
     // 5b. Resolve GH_TOKEN
     const ghToken = await getToken();
 
-    // 5c. Resolve config dir for volume mount
+    // 5c. Ensure config dir exists on the host before bind-mounting it.
+    // If Docker creates the directory it will be owned by root, causing
+    // permission problems for subsequent runs as a non-root user.
     const configDir = resolveConfigDir();
+    mkdirp(configDir);
 
-    // 5d. Launch container
+    // 5d. Build env: forward API keys from the host when set, plus the
+    // resolved GitHub token (mirrored into both GH_TOKEN and GITHUB_TOKEN
+    // for compatibility with tooling that expects either name).
+    const env: Record<string, string> = {};
+
+    for (const key of PASSTHROUGH_ENV_VARS) {
+      const val = process.env[key];
+      if (val) env[key] = val;
+    }
+
+    if (ghToken) {
+      env["GH_TOKEN"] = ghToken;
+      env["GITHUB_TOKEN"] = ghToken;
+    }
+
+    // 5e. Launch container
     await docker.run({
       name: args.name,
       workspace: args.workspace,
       volumes: [`${configDir}:/root/.mypi/agent`],
-      env: {
-        ...(ghToken ? { GH_TOKEN: ghToken } : {}),
-      },
+      env,
       additionalArgs: args.piArgs.length > 0 ? args.piArgs : undefined,
     });
 
@@ -184,7 +218,10 @@ async function main(): Promise<void> {
   process.exit(exitCode);
 }
 
-// Only run when this file is the entry point, not when imported (e.g. by tests)
-if (import.meta.path === Bun.main) {
+// import.meta.main is true when this file is run directly by Bun (bun run
+// src/main.ts) and also when invoked via the bin/mypi wrapper that imports
+// this file. import.meta.path === Bun.main only matched the direct-run case
+// and caused the wrapper to be a no-op.
+if (import.meta.main) {
   main();
 }
