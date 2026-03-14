@@ -16,6 +16,7 @@ import { DockerManager } from "./docker/DockerManager";
 import type { ContainerInfo, RunOptions } from "./docker/DockerManager";
 import { resolveConfigDir } from "./config/paths";
 import { resolveToken } from "./config/tokens";
+import { syncPiConfig } from "./config/sync";
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -85,6 +86,8 @@ export interface RunDeps {
   getToken?: () => Promise<string>;
   /** mkdir -p implementation (or mock); defaults to fs.mkdirSync */
   mkdirp?: (dir: string) => void;
+  /** Sync ~/.pi into local .pi/ before build (or mock) */
+  syncConfig?: (dest: string) => Promise<void>;
 }
 
 // ── Core run function (exported for tests) ─────────────────────────────────
@@ -121,6 +124,7 @@ export async function run(
     deps.docker ?? new DockerManager(IMAGE_NAME);
   const getToken = deps.getToken ?? resolveToken;
   const mkdirp = deps.mkdirp ?? ((dir: string) => fs.mkdirSync(dir, { recursive: true }));
+  const doSyncConfig = deps.syncConfig ?? syncPiConfig;
 
   // 3. List
   if (args.list) {
@@ -164,6 +168,7 @@ export async function run(
     // args.build is true — this is intentional to save a docker round-trip.
     const needsBuild = args.build || !(await docker.imageExists());
     if (needsBuild) {
+      await doSyncConfig(path.join(PROJECT_ROOT, ".pi"));
       console.log("Building Docker image…");
       await docker.build(DOCKERFILE_PATH);
       console.log("Build complete.");
