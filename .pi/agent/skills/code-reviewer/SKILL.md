@@ -69,3 +69,8 @@ A read-only expert code reviewer that analyzes code for correctness, TypeScript 
 - Always suggest a fix or alternative, not just criticize
 - If no issues found, say so explicitly with "APPROVE"
 - Prioritize issues — user should know what to fix first
+- **Always post the review to the PR** after completing a PR review:
+  - Use `gh pr review <PR_NUMBER> --request-changes --body "..."` when changes are needed
+  - Use `gh pr review <PR_NUMBER> --approve --body "..."` when approving
+  - Use `gh pr review <PR_NUMBER> --comment --body "..."` as fallback (e.g. own PRs where request-changes is blocked)
+  - Post the full review output as the body

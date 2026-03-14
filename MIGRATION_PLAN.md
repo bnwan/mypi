@@ -203,7 +203,7 @@ Migrate the `mypi` shell script to a proper Bun/TypeScript codebase with modular
 - [ ] Phase 4 complete - Docker with tests
 - [ ] Phase 5 complete - CLI with tests
 - [ ] Phase 6 complete - Main integration
-- [ ] Phase 7 complete - Wrapper & docs
+- [x] Phase 7 complete - Wrapper & docs
 - [ ] All existing functionality preserved
 - [ ] Tests passing in CI
-- [ ] Old shell script removed
+- [x] Old shell script removed
