@@ -144,4 +144,30 @@ describe("parseArgs", () => {
       expect(result.extraArgs).toEqual(["implement", "feature"]);
     });
   });
+
+  describe("missing-value errors", () => {
+    it("should throw when --name is provided with no value", () => {
+      expect(() => parseArgs(["--name"])).toThrow("--name requires a value");
+    });
+
+    it("should throw when --name is followed by another flag", () => {
+      expect(() => parseArgs(["--name", "--build"])).toThrow("--name requires a value");
+    });
+
+    it("should throw when --workspace is provided with no value", () => {
+      expect(() => parseArgs(["--workspace"])).toThrow("--workspace requires a value");
+    });
+
+    it("should throw when --workspace is followed by another flag", () => {
+      expect(() => parseArgs(["--workspace", "--list"])).toThrow("--workspace requires a value");
+    });
+
+    it("should throw when --stop is provided with no value", () => {
+      expect(() => parseArgs(["--stop"])).toThrow("--stop requires a value");
+    });
+
+    it("should throw when --stop is followed by another flag", () => {
+      expect(() => parseArgs(["--stop", "--build"])).toThrow("--stop requires a value");
+    });
+  });
 });
