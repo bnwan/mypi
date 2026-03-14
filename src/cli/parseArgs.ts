@@ -81,7 +81,9 @@ export function parseArgs(argv: string[]): ParsedArgs {
 
     // --name NAME or --name=NAME
     if (arg === "--name") {
-      result.name = argv[i + 1];
+      const val = argv[i + 1];
+      if (!val || val.startsWith("--")) throw new Error("--name requires a value");
+      result.name = val;
       i += 2;
       continue;
     }
@@ -93,7 +95,9 @@ export function parseArgs(argv: string[]): ParsedArgs {
 
     // --workspace PATH or --workspace=PATH
     if (arg === "--workspace") {
-      result.workspace = argv[i + 1];
+      const val = argv[i + 1];
+      if (!val || val.startsWith("--")) throw new Error("--workspace requires a value");
+      result.workspace = val;
       i += 2;
       continue;
     }
@@ -105,7 +109,9 @@ export function parseArgs(argv: string[]): ParsedArgs {
 
     // --stop NAME or --stop=NAME
     if (arg === "--stop") {
-      result.stop = argv[i + 1];
+      const val = argv[i + 1];
+      if (!val || val.startsWith("--")) throw new Error("--stop requires a value");
+      result.stop = val;
       i += 2;
       continue;
     }

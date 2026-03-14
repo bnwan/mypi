@@ -39,14 +39,15 @@ The following changes were made across the repo:
 
 > Note: `ENTRYPOINT ["pi"]` in the Dockerfile was left unchanged — it refers to the binary installed inside the container by the upstream `@mariozechner/pi-coding-agent` npm package.
 
-### Migration
+### Migration from shell script installation
 
-1. Rebuild the Docker image under the new tag:
-   ```sh
-   mypi --build
-   ```
-2. Update the system symlink:
-   ```sh
-   sudo ln -sf ~/projects/pi/mypi /usr/local/bin/mypi
-   sudo rm /usr/local/bin/pi
-   ```
+If you previously installed via `sudo ln -sf`, switch to `bun link`:
+
+```sh
+# Remove the old symlink
+sudo rm /usr/local/bin/mypi
+
+# Install dependencies and link via bun
+cd ~/projects/mypi
+bun install && bun link
+```

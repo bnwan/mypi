@@ -4,6 +4,7 @@
  */
 
 import * as path from "path";
+import * as fs from "fs";
 import * as process from "process";
 import { parseArgs } from "./cli/parseArgs";
 import { resolveConfigDir, resolveWorkspacePath } from "./config/paths";
@@ -29,8 +30,7 @@ All other arguments are passed to pi`);
 
 /** Resolve the Dockerfile path relative to this script's location */
 function resolveDockerfilePath(): string {
-  // bin/mypi imports this file as ../src/main.ts
-  // __dirname here resolves to the src/ directory at runtime
+  // Uses import.meta.dir (Bun ESM) which resolves to the src/ directory at runtime
   return path.resolve(import.meta.dir, "..", "Dockerfile");
 }
 
@@ -62,14 +62,23 @@ export async function main(argv: string[]): Promise<void> {
   // --stop
   if (args.stop) {
     console.log(`Stopping mypi container: ${args.stop}`);
-    await docker.stop(args.stop);
-    console.log(`Stopped and removed ${args.stop}`);
+    try {
+      await docker.stop(args.stop);
+      console.log(`Stopped and removed ${args.stop}`);
+    } catch {
+      console.error(`Failed to stop ${args.stop} (container may not exist)`);
+      process.exit(1);
+    }
     return;
   }
 
   // Resolve paths
   const workspace = resolveWorkspacePath(args.workspace ?? "");
   const configDir = resolveConfigDir();
+
+  // Ensure config dir exists on the host before mounting — if Docker creates it,
+  // it will be owned by root which breaks subsequent writes by the agent process.
+  fs.mkdirSync(configDir, { recursive: true });
 
   // Build image if requested or not yet present
   if (args.build || !(await docker.imageExists())) {
