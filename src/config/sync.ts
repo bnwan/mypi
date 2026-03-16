@@ -23,6 +23,10 @@ export interface SyncDeps {
   rm: (p: string) => Promise<void>;
   /** Recursively copies src into dest (dest must not exist beforehand) */
   copy: (src: string, dest: string) => Promise<void>;
+  /** Read file contents */
+  readFile: (p: string) => Promise<string>;
+  /** Write file contents */
+  writeFile: (p: string, content: string) => Promise<void>;
   /** Log output function */
   log: (msg: string) => void;
 }
@@ -43,8 +47,32 @@ const defaultDeps: SyncDeps = {
   rm: (p: string) => fs.promises.rm(p, { recursive: true, force: true }),
   copy: (src: string, dest: string) =>
     fs.promises.cp(src, dest, { recursive: true }),
+  readFile: (p: string) => fs.promises.readFile(p, "utf-8"),
+  writeFile: (p: string, content: string) => fs.promises.writeFile(p, content, "utf-8"),
   log: console.log,
 };
+
+/**
+ * Rewrites local-only hostnames in a models.json string so they resolve
+ * correctly from inside a Docker container.
+ *
+ * Replaces:
+ *  - `127.0.0.1`  → `host.docker.internal`
+ *  - `localhost`  → `host.docker.internal`
+ *
+ * The `localhost` match uses negative lookbehind/lookahead for `[a-zA-Z0-9-]`
+ * so that hyphenated strings like `"my-localhost-model"` are left untouched
+ * while URL hostnames like `http://localhost:11434` are rewritten correctly.
+ * (`\b` alone is insufficient because hyphens are not word characters.)
+ *
+ * @param content - Raw string contents of models.json
+ * @returns Transformed string (identical to input if no replacements made)
+ */
+export function rewriteLocalHosts(content: string): string {
+  return content
+    .replace(/127\.0\.0\.1/g, "host.docker.internal")
+    .replace(/(?<![a-zA-Z0-9-])localhost(?![a-zA-Z0-9-])/g, "host.docker.internal");
+}
 
 /**
  * Syncs ~/.pi into the given dest directory before a Docker build.
@@ -77,4 +105,23 @@ export async function syncPiConfig(
   deps.log(`Copying ~/.pi → ${dest}...`);
   await deps.rm(dest);
   await deps.copy(src, dest);
+
+  // Transform models.json for Docker: replace local addresses with host.docker.internal
+  const modelsPath = path.join(dest, "agent", "models.json");
+  if (await deps.exists(modelsPath)) {
+    try {
+      const content = await deps.readFile(modelsPath);
+      const transformed = rewriteLocalHosts(content);
+      if (content !== transformed) {
+        await deps.writeFile(modelsPath, transformed);
+        deps.log("Transformed models.json for Docker container access");
+      }
+    } catch (err) {
+      // Log a warning — silently ignoring I/O errors here would leave the
+      // container running with 127.0.0.1 addresses with no indication of failure.
+      deps.log(
+        `Warning: could not transform models.json: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  }
 }
